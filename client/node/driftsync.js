@@ -171,7 +171,7 @@ class DRIFTsync {
 		if (this._roundTripTimes.length == 0)
 			return 0;
 
-		return this._roundTripTimes.sort()[
+		return this._roundTripTimes.concat().sort()[
 				Math.floor(this._roundTripTimes.length / 2)];
 	}
 

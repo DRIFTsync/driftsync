@@ -148,7 +148,7 @@ class DRIFTsync {
 				average: this._arrayAverage(this._accuracy) * this._scale,
 				max: Math.max(...this._accuracy) * this._scale
 			};
-		});
+		}).catch(() => empty);
 	}
 
 	_localTime()
@@ -285,7 +285,6 @@ if (require.main === module) {
 	let loop = () => {
 		sync.accuracy(true)
 			.then(output)
-			.catch((error) => {})
 			.then(() => loop());
 	};
 

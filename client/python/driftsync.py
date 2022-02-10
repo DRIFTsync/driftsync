@@ -94,7 +94,7 @@ class DRIFTsync(object):
 	def statistics(self):
 		return self._sentRequests, self._receivedSamples, self._rejectedSamples
 
-	def accuracy(self, wait=False, reset=False, timeout=None):
+	def accuracy(self, wait=False, reset=False, timeout=15):
 		with self._lock:
 			if not self._measureAccuracy:
 				return 0, 0, 0
@@ -209,7 +209,7 @@ if __name__ == '__main__':
 			time.sleep(0.005)
 
 	while True:
-		minDelta, averageDelta, maxDelta = sync.accuracy(True, timeout=15)
+		minDelta, averageDelta, maxDelta = sync.accuracy(True)
 		sent, received, rejected = sync.statistics
 		globalTime = sync.globalTime()
 

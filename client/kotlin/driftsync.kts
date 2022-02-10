@@ -227,7 +227,7 @@ if (args.contains("--stream")) {
 }
 
 while (true) {
-	val accuracy = sync.accuracy(true, timeout = 15000)
+	val accuracy = sync.accuracy(true)
 	val stats = sync.statistics
 	val globalTime = sync.globalTime()
 	val playbackRate = sync.suggestPlaybackRate(globalTime, 0.0)

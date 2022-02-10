@@ -260,7 +260,7 @@ public class DRIFTsync {
 		}
 
 		while (true) {
-			Accuracy accuracy = sync.accuracy(true, timeout: 15000);
+			Accuracy accuracy = sync.accuracy(true);
 			Statistics stats = sync.statistics;
 			double globalTime = sync.globalTime();
 			double playbackRate = sync.suggestPlaybackRate(globalTime, 0);

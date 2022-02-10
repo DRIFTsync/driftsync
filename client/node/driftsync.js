@@ -121,7 +121,7 @@ class DRIFTsync {
 		};
 	}
 
-	accuracy(wait = false, reset = false, timeout = undefined)
+	accuracy(wait = false, reset = false, timeout = 15000)
 	{
 		const empty = { min: 0, average: 0, max: 0 };
 		if (!this._measureAccuracy)
@@ -283,7 +283,7 @@ if (require.main === module) {
 	};
 
 	let loop = () => {
-		sync.accuracy(true, false, 15000)
+		sync.accuracy(true)
 			.then(output)
 			.catch((error) => {})
 			.then(() => loop());

@@ -140,7 +140,7 @@ struct DRIFTsync {
 	int64_t averageOffset;
 	struct ring_buffer accuracySamples;
 	struct statistics statistics;
-	int interval;
+	struct timespec interval;
 	double scale;
 	int measureAccuracy;
 };
@@ -224,7 +224,7 @@ request_loop(void *data)
 			continue;
 		}
 
-		usleep(sync->interval);
+		nanosleep(&sync->interval, NULL);
 	}
 
 	return NULL;
@@ -399,7 +399,9 @@ DRIFTsync_create(const char *server, uint16_t port, double scale, int interval,
 	ring_buffer_init(&sync->offsets, sync->maxSamples, sizeof(int64_t));
 	ring_buffer_init(&sync->accuracySamples, sync->maxSamples, sizeof(int64_t));
 
-	sync->interval = interval;
+	sync->interval.tv_sec = interval / 1000000;
+	sync->interval.tv_nsec = (interval % 1000000) * 1000;
+
 	sync->scale = scale;
 	sync->measureAccuracy = measureAccuracy;
 
@@ -556,9 +558,14 @@ main(int argc, char *argv[])
 		stream = strcmp(argv[i], "--stream") == 0;
 
 	if (stream) {
+		struct timespec sleepTime = {
+			.tv_sec = 0,
+			.tv_nsec = 5 * 1000 * 1000
+		};
+
 		while (1) {
 			printf("%.3f\n", DRIFTsync_globalTime(sync));
-			usleep(5 * 1000);
+			nanosleep(&sleepTime, NULL);
 		}
 	}
 

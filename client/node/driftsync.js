@@ -168,6 +168,9 @@ class DRIFTsync {
 
 	_medianRoundTripTime()
 	{
+		if (this._roundTripTimes.length == 0)
+			return 0;
+
 		return this._roundTripTimes.sort()[
 				Math.floor(this._roundTripTimes.length / 2)];
 	}

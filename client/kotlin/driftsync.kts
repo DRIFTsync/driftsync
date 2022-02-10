@@ -118,6 +118,8 @@ class DRIFTsync(
 
 	private fun _medianRoundTripTime(): Long {
 		lock.withLock {
+			if (roundTripTimes.size == 0)
+				return 0
 			return roundTripTimes.sorted()[roundTripTimes.size / 2]
 		}
 	}

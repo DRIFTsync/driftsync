@@ -148,6 +148,9 @@ public class DRIFTsync {
 
 	private long _medianRoundTripTime() {
 		lock(this) {
+			if (roundTripTimes.Count == 0)
+				return 0;
+
 			List<long> sorted = new List<long>(roundTripTimes);
 			sorted.Sort();
 			return sorted[sorted.Count / 2];

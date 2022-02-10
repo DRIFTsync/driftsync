@@ -488,7 +488,7 @@ accumulate_accuracy(void *_data, void *_state)
 
 void
 DRIFTsync_accuracy(struct DRIFTsync *sync, struct accuracy *accuracy, int wait,
-	int reset, int timeout)
+	int reset, int _timeout)
 {
 	accuracy->min = accuracy->average = accuracy->max = 0.0;
 
@@ -501,11 +501,13 @@ DRIFTsync_accuracy(struct DRIFTsync *sync, struct accuracy *accuracy, int wait,
 		ring_buffer_clear(&sync->accuracySamples);
 
 	if (wait) {
-		if (timeout > 0) {
+		if (_timeout > 0) {
 			struct timespec spec;
 			clock_gettime(CLOCK_REALTIME, &spec);
-			spec.tv_sec += timeout / 1000 / 1000;
-			spec.tv_nsec += (timeout % 1000 / 1000) * 1000;
+			int64_t timeout = _timeout + (int64_t)spec.tv_sec * 1000 * 1000
+				+ (int64_t)spec.tv_nsec / 1000;
+			spec.tv_sec = timeout / 1000000;
+			spec.tv_nsec = (timeout % 1000000) * 1000;
 
 			if (pthread_cond_timedwait(&sync->condition, &sync->lock, &spec)
 					!= 0) {

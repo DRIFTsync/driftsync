@@ -5,6 +5,7 @@ services:
         build: .
         ports:
             - 4318:4318/udp
+        restart: always
 
     client:
         build:

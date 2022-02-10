@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <float.h>
-#include <math.h>
 #include <netdb.h>
 #include <pthread.h>
 #include <signal.h>

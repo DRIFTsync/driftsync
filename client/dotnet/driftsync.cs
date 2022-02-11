@@ -29,6 +29,9 @@ public class DRIFTsync {
 	private List<long> accuracySamples = new List<long>();
 	private int interval = 0;
 	private UdpClient client = new UdpClient();
+	private Thread requestThread = null;
+	private Thread receiveThread = null;
+	private bool quitting = false;
 	private Accuracy emptyAccuracy
 		= new Accuracy() { min = 0, average = 0, max = 0 };
 
@@ -61,8 +64,29 @@ public class DRIFTsync {
 
 		client.Connect(server, port);
 
-		new Thread(new ThreadStart(RequestLoop)).Start();
-		new Thread(new ThreadStart(ReceiveLoop)).Start();
+		receiveThread = new Thread(new ThreadStart(ReceiveLoop));
+		receiveThread.Start();
+
+		requestThread = new Thread(new ThreadStart(RequestLoop));
+		requestThread.Start();
+	}
+
+	public void quit() {
+		lock(this) {
+			if (quitting)
+				return;
+
+			quitting = true;
+			Monitor.PulseAll(this);
+		}
+
+		client.Close();
+
+		requestThread.Interrupt();
+		receiveThread.Interrupt();
+
+		requestThread.Join();
+		receiveThread.Join();
 	}
 
 	public double localTime() {
@@ -171,7 +195,7 @@ public class DRIFTsync {
 		writer.Write(DRIFTSYNC_MAGIC);
 		writer.Write((UInt32)0);
 
-		while (true) {
+		while (!quitting) {
 			sentRequests++;
 
 			stream.Position = 8;
@@ -191,9 +215,12 @@ public class DRIFTsync {
 		MemoryStream stream = new MemoryStream(buffer);
 		BinaryReader reader = new BinaryReader(stream);
 
-		while (true) {
+		while (!quitting) {
 			int received = socket.ReceiveFrom(buffer, ref endpoint);
 			long now = _localTime();
+
+			if (quitting)
+				break;
 
 			if (received != DRIFTSYNC_PACKET_LENGTH)
 				continue;
@@ -259,7 +286,13 @@ public class DRIFTsync {
 			}
 		}
 
+		int remaining = 0;
 		while (true) {
+			if (remaining != 0 && --remaining == 0) {
+				sync.quit();
+				break;
+			}
+
 			Accuracy accuracy = sync.accuracy(true);
 			Statistics stats = sync.statistics;
 			double globalTime = sync.globalTime();

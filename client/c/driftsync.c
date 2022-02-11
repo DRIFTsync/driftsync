@@ -143,6 +143,9 @@ struct DRIFTsync {
 	struct timespec interval;
 	double scale;
 	int measureAccuracy;
+	int quitting;
+	pthread_t requestThread;
+	pthread_t receiveThread;
 };
 
 
@@ -207,7 +210,7 @@ request_loop(void *data)
 	memset(&packet, 0, sizeof(packet));
 	packet.magic = DRIFTSYNC_MAGIC;
 
-	while (1) {
+	while (!sync->quitting) {
 		sync->statistics.sentRequests++;
 
 		packet.local = localTime();
@@ -247,10 +250,13 @@ receive_loop(void *data)
 	socklen_t remoteLength = sizeof(peer);
 	struct driftsync_packet packet;
 
-	while (1) {
+	while (!sync->quitting) {
 		int result = recvfrom(sync->socket, &packet, sizeof(packet), 0,
 			(struct sockaddr *)&peer, &remoteLength);
 		int64_t now = localTime();
+
+		if (sync->quitting)
+			break;
 
 		if (result < 0) {
 			printf("failed to receive: %s\n", strerror(errno));
@@ -337,17 +343,31 @@ receive_loop(void *data)
 
 
 void
-DRIFTsync_destroy(struct DRIFTsync *sync)
+DRIFTsync_quit(struct DRIFTsync *sync)
 {
+	pthread_mutex_lock(&sync->lock);
+	sync->quitting = 1;
+	pthread_cond_broadcast(&sync->condition);
+	pthread_mutex_unlock(&sync->lock);
+
 	close(sync->socket);
+
+	pthread_cancel(sync->requestThread);
+	pthread_cancel(sync->receiveThread);
+
+	pthread_join(sync->requestThread, NULL);
+	pthread_join(sync->receiveThread, NULL);
 
 	ring_buffer_destroy(&sync->roundTripTimes);
 	ring_buffer_destroy(&sync->sortedRoundTripTimes);
 	ring_buffer_destroy(&sync->samples);
+	ring_buffer_destroy(&sync->offsets);
 	ring_buffer_destroy(&sync->accuracySamples);
 
 	pthread_cond_destroy(&sync->condition);
 	pthread_mutex_destroy(&sync->lock);
+
+	free(sync);
 }
 
 
@@ -404,10 +424,10 @@ DRIFTsync_create(const char *server, uint16_t port, double scale, int interval,
 
 	sync->scale = scale;
 	sync->measureAccuracy = measureAccuracy;
+	sync->quitting = 0;
 
-	pthread_t thread;
-	pthread_create(&thread, NULL, &receive_loop, sync);
-	pthread_create(&thread, NULL, &request_loop, sync);
+	pthread_create(&sync->receiveThread, NULL, &receive_loop, sync);
+	pthread_create(&sync->requestThread, NULL, &request_loop, sync);
 
 	return sync;
 }
@@ -571,7 +591,14 @@ main(int argc, char *argv[])
 		}
 	}
 
+	int remaining = 0;
 	while (1) {
+		if (remaining != 0 && --remaining == 0) {
+			DRIFTsync_quit(sync);
+			sync = NULL;
+			break;
+		}
+
 		struct accuracy accuracy;
 		DRIFTsync_accuracy(sync, &accuracy, 1, 0, 15000 * 1000);
 

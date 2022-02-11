@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import dataclasses
+import select
 import socket
 import struct
 import threading
@@ -36,18 +37,40 @@ class DRIFTsync(object):
 		self._receivedSamples = 0
 		self._rejectedSamples = 0
 		self._accuracy = []
+		self._quitting = threading.Event()
 
 		self._address = socket.getaddrinfo(server, port, family=socket.AF_INET,
 			proto=socket.IPPROTO_UDP)[0][-1]
 		self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		self._interrupt = socket.socketpair()
 
 		self._lock = threading.Condition()
 		self._scale = scale
 		self._interval = interval
 		self._measureAccuracy = measureAccuracy
 
-		threading.Thread(target=self._receiveLoop, daemon=True).start()
-		threading.Thread(target=self._requestLoop, daemon=True).start()
+		self._receiveThread = threading.Thread(target=self._receiveLoop)
+		self._receiveThread.start()
+
+		self._requestThread = threading.Thread(target=self._requestLoop)
+		self._requestThread.start()
+
+	def quit(self):
+		with self._lock:
+			if self._quitting.is_set():
+				return
+
+			self._quitting.set()
+			self._lock.notify()
+
+		self._socket.close()
+		self._interrupt[0].send(b'0')
+
+		self._requestThread.join()
+		self._receiveThread.join()
+
+		self._interrupt[0].close()
+		self._interrupt[1].close()
 
 	@property
 	def scale(self):
@@ -146,14 +169,20 @@ class DRIFTsync(object):
 		self._socket.sendto(data, self._address)
 
 	def _requestLoop(self):
-		while True:
+		while not self._quitting.is_set():
 			self._sendRequest()
-			time.sleep(self._interval)
+			self._quitting.wait(self._interval)
 
 	def _receiveLoop(self):
-		while True:
-			data = self._socket.recv(self._DRIFTSYNC_PACKET_LENGTH)
+		selectArgs = ([self._socket, self._interrupt[1]], [], [])
+		while not self._quitting.is_set():
+			readable, _, _ = select.select(*selectArgs)
 			now = self._localTime()
+
+			if self._socket not in readable or self._quitting.is_set():
+				continue
+
+			data = self._socket.recv(self._DRIFTSYNC_PACKET_LENGTH)
 
 			if len(data) != self._DRIFTSYNC_PACKET_LENGTH:
 				continue
@@ -208,7 +237,14 @@ if __name__ == '__main__':
 			print(f'{sync.globalTime():.3f}')
 			time.sleep(0.005)
 
+	remaining = 0
 	while True:
+		if remaining != 0:
+			remaining -= 1
+			if remaining == 0:
+				sync.quit()
+				break
+
 		minDelta, averageDelta, maxDelta = sync.accuracy(True)
 		sent, received, rejected = sync.statistics
 		globalTime = sync.globalTime()

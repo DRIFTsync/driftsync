@@ -114,6 +114,15 @@ Note for the JavaScript implementation: The arguments should be provided as an
 object with keys of the same name. This allows similar behaviour to named
 arguments.
 
+### quit
+```
+quit()
+```
+
+Stops synchronization and waits for threads to exit, then frees allocated
+resources where necessary. The object must not be used anymore after calling
+quit.
+
 ### localTime
 ```
 localTime()

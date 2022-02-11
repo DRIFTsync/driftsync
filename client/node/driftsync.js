@@ -41,7 +41,12 @@ class DRIFTsync {
 				return;
 			}
 
+			if (this._quitting)
+				return;
+
 			this._address = address;
+			this._loop = setInterval(() => this._sendRequest(), this._interval);
+			this._sendRequest();
 		});
 
 		this._socket = dgram.createSocket('udp4');
@@ -53,8 +58,18 @@ class DRIFTsync {
 		this._scale = options.scale || DRIFTsync.SCALE_US;
 		this._interval = options.interval || 5000;
 		this._measureAccuracy = !!options.measureAccuracy;
+		this._quitting = false;
+	}
 
-		setInterval(() => this._sendRequest(), this._interval);
+	quit()
+	{
+		this._quitting = true;
+
+		if (this._loop)
+			clearInterval(this._loop);
+
+		this._notifyAccuracyWaiters();
+		this._socket.close();
 	}
 
 	get scale()
@@ -197,6 +212,12 @@ class DRIFTsync {
 		this._sentRequests++;
 	}
 
+	_notifyAccuracyWaiters()
+	{
+		while (this._accuracyWaiters.length > 0)
+			this._accuracyWaiters.shift()();
+	}
+
 	_received(buffer)
 	{
 		let now = this._localTime();
@@ -248,8 +269,7 @@ class DRIFTsync {
 			localTime -= this._localTime();
 
 			this._push(this._accuracy, Math.abs(globalTime - localTime));
-			while (this._accuracyWaiters.length > 0)
-				this._accuracyWaiters.shift()();
+			this._notifyAccuracyWaiters();
 		}
 	}
 }
@@ -282,7 +302,13 @@ if (require.main === module) {
 		console.log()
 	};
 
+	let remaining = undefined;
 	let loop = () => {
+		if (remaining && --remaining == 0) {
+			sync.quit()
+			return;
+		}
+
 		sync.accuracy(true)
 			.then(output)
 			.then(() => loop());

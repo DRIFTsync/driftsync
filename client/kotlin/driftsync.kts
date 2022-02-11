@@ -3,6 +3,7 @@ package org.driftsync
 import java.net.InetAddress
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.SocketException
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.locks.ReentrantLock
@@ -51,6 +52,7 @@ class DRIFTsync(
 	private var receivedSamples = 0
 	private var rejectedSamples = 0
 	private var accuracySamples: MutableList<Long> = mutableListOf()
+	private var quitting = false
 
 	private val socket = DatagramSocket()
 	private val lock = ReentrantLock()
@@ -141,13 +143,16 @@ class DRIFTsync(
 		buffer.putInt(0)
 		buffer.mark()
 
-		while (true) {
+		while (!quitting) {
 			sentRequests++
 			buffer.reset()
 			buffer.putLong(_localTime())
 			socket.send(packet)
 
-			Thread.sleep(interval)
+			try {
+				Thread.sleep(interval)
+			} catch (exception: InterruptedException) {
+			}
 		}
 	}
 
@@ -157,9 +162,16 @@ class DRIFTsync(
 
 		buffer.order(ByteOrder.LITTLE_ENDIAN)
 
-		while (true) {
-			socket.receive(packet)
+		while (!quitting) {
+			try {
+				socket.receive(packet)
+			} catch (exception: SocketException) {
+			}
+
 			val now = _localTime()
+
+			if (quitting)
+				break
 
 			if (packet.length != DRIFTSYNC_PACKET_LENGTH)
 				continue
@@ -212,6 +224,21 @@ class DRIFTsync(
 			}
 		}
 	}
+
+	fun quit() {
+		lock.withLock {
+			quitting = true
+			condition.signalAll()
+		}
+
+		socket.close()
+
+		requestThread.interrupt()
+		receiveThread.interrupt()
+
+		requestThread.join()
+		receiveThread.join()
+	}
 }
 
 var sync = DRIFTsync(args.firstOrNull() ?: "localhost", scale = SCALE_MS,
@@ -226,7 +253,13 @@ if (args.contains("--stream")) {
 	}
 }
 
+var remaining = 0
 while (true) {
+	if (remaining != 0 && --remaining == 0) {
+		sync.quit()
+		break
+	}
+
 	val accuracy = sync.accuracy(true)
 	val stats = sync.statistics
 	val globalTime = sync.globalTime()

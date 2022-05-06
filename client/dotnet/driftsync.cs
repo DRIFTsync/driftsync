@@ -201,13 +201,16 @@ public class DRIFTsync {
 			stream.Position = 8;
 			writer.Write(_localTime());
 
-			client.Send(buffer, buffer.Length);
+			try {
+				client.Send(buffer, buffer.Length);
+			} catch (Exception) {
+			}
+
 			Thread.Sleep(interval);
 		}
 	}
 
 	private void ReceiveLoop() {
-		Socket socket = client.Client;
 		IPEndPoint ipEndpoint = new IPEndPoint(IPAddress.Any, 0);
 		EndPoint endpoint = (EndPoint)ipEndpoint;
 

@@ -28,7 +28,8 @@ public class DRIFTsync {
 	private int rejectedSamples = 0;
 	private List<long> accuracySamples = new List<long>();
 	private int interval = 0;
-	private UdpClient client = new UdpClient();
+	private Socket socket = null;
+	private IPEndPoint endpoint = null;
 	private Thread requestThread = null;
 	private Thread receiveThread = null;
 	private bool quitting = false;
@@ -62,7 +63,20 @@ public class DRIFTsync {
 		this.scale = scale;
 		this.measureAccuracy = measureAccuracy;
 
-		client.Connect(server, port);
+		IPAddress address;
+		try {
+			address = IPAddress.Parse(server);
+		} catch (FormatException) {
+			IPHostEntry hostEntry = Dns.GetHostEntry(server);
+			address = hostEntry.AddressList[0];
+		}
+
+		endpoint = new IPEndPoint(address, port);
+		socket = new Socket(endpoint.Address.AddressFamily, SocketType.Dgram,
+			ProtocolType.Udp);
+
+		IPEndPoint bindEndpoint = new IPEndPoint(IPAddress.Any, 0);
+		socket.Bind(bindEndpoint);
 
 		receiveThread = new Thread(new ThreadStart(ReceiveLoop));
 		receiveThread.Start();
@@ -80,7 +94,7 @@ public class DRIFTsync {
 			Monitor.PulseAll(this);
 		}
 
-		client.Close();
+		socket.Close();
 
 		requestThread.Interrupt();
 		receiveThread.Interrupt();
@@ -202,7 +216,7 @@ public class DRIFTsync {
 			writer.Write(_localTime());
 
 			try {
-				client.Send(buffer, buffer.Length);
+				socket.SendTo(buffer, endpoint);
 			} catch (Exception) {
 			}
 

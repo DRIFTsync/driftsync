@@ -49,7 +49,7 @@ public class DRIFTsync {
 
 	public const double SCALE_US = 1;
 	public const double SCALE_MS = SCALE_US / 1000;
-	public const double SALE_S = SCALE_MS / 1000;
+	public const double SCALE_S = SCALE_MS / 1000;
 
 	public double scale = 0;
 	public bool measureAccuracy = false;
